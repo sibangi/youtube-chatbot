@@ -1,3 +1,6 @@
 PyQt5==5.15.11
 youtube_transcript_api==0.6.2
-openai==1.36.1
+openai==1.37.1
+flask==3.0.3
+urllib3~=2.2.2
+gunicorn==22.0.0
