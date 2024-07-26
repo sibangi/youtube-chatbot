@@ -83,7 +83,7 @@ def submit_feedback():
 @app.route('/download_csv')
 @login_required
 def download_csv():
-    csv_path = "/app/data/qa_feedback_log.csv"
+    csv_path = "qa_feedback_log.csv"
     if os.path.exists(csv_path):
         return send_file(csv_path, as_attachment=True, download_name="qa_feedback_log.csv")
     else:
@@ -93,7 +93,7 @@ def download_csv():
 @app.route('/reset_csv', methods=['POST'])
 @login_required
 def reset_csv():
-    csv_path = "/app/data/qa_feedback_log.csv"
+    csv_path = "qa_feedback_log.csv"
     try:
         if os.path.exists(csv_path):
             os.remove(csv_path)
