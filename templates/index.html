@@ -11,13 +11,14 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.10.3/cdn.min.js" defer></script>
 </head>
 <body class="bg-light">
-    <div class="container py-5" x-data="{
+    <div class="container py-5" x-data="{ 
         isVideoLoading: false,
         isVideoLoaded: false,
         isQuestionLoading: false,
         answer: '',
         isQuestionAsked: false,
         formValid: false,
+        streamingAnswer: false,
         checkFormValidity() {
             this.formValid = document.getElementById('first_name').value.trim() !== '' &&
                              document.getElementById('last_name').value.trim() !== '' &&
@@ -35,25 +36,38 @@
         },
         async askQuestion() {
             if (!this.formValid || !this.isVideoLoaded) return;
-
+            
             this.isQuestionLoading = true;
-            const response = await fetch('/ask', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    youtube_url: document.getElementById('youtube_url').value,
-                    question: document.getElementById('question').value,
-                    nickname: document.getElementById('first_name').value + ' ' + document.getElementById('last_name').value,
-                    work_status: document.getElementById('work_status').value,
-                    gender: document.getElementById('gender').value
-                })
-            });
-            const result = await response.json();
-            this.answer = result.answer;
-            this.isQuestionLoading = false;
-            this.isQuestionAsked = true;
+            this.streamingAnswer = true;
+            this.answer = '';
+
+            const eventSource = new EventSource('/ask_stream?' + new URLSearchParams({
+                youtube_url: document.getElementById('youtube_url').value,
+                question: document.getElementById('question').value,
+                first_name: document.getElementById('first_name').value,
+                last_name: document.getElementById('last_name').value,
+                work_status: document.getElementById('work_status').value,
+                gender: document.getElementById('gender').value
+            }));
+
+            eventSource.onmessage = (event) => {
+                if (event.data === '[DONE]') {
+                    eventSource.close();
+                    this.isQuestionLoading = false;
+                    this.streamingAnswer = false;
+                    this.isQuestionAsked = true;
+                } else {
+                    this.answer += event.data;
+                }
+            };
+
+            eventSource.onerror = (error) => {
+                console.error('EventSource failed:', error);
+                eventSource.close();
+                this.isQuestionLoading = false;
+                this.streamingAnswer = false;
+                this.isQuestionAsked = true;
+            };
         },
         async submitFeedback(type) {
             const response = await fetch('/feedback', {
@@ -81,7 +95,7 @@
                 <div class="card shadow">
                     <div class="card-body">
                         <h1 class="card-title text-center mb-4">YouTube Video Q&A</h1>
-
+                        
                         <form @change="checkFormValidity">
                             <div class="row mb-3">
                                 <div class="col-md-6">
@@ -93,7 +107,7 @@
                                     <input type="text" class="form-control" id="last_name" placeholder="Last Name" required>
                                 </div>
                             </div>
-
+                            
                             <div class="mb-3">
                                 <label for="work_status" class="form-label">Work Status</label>
                                 <select class="form-select" id="work_status" required>
@@ -102,7 +116,7 @@
                                     <option value="Staff">Staff</option>
                                 </select>
                             </div>
-
+                            
                             <div class="mb-3">
                                 <label for="gender" class="form-label">Gender</label>
                                 <select class="form-select" id="gender" required>
@@ -112,20 +126,20 @@
                                     <option value="Other">Other</option>
                                 </select>
                             </div>
-
+                            
                             <div class="mb-3">
                                 <label for="youtube_url" class="form-label">YouTube URL</label>
                                 <input type="text" class="form-control" id="youtube_url" placeholder="https://www.youtube.com/watch?v=..." required @input="isVideoLoaded = false">
                             </div>
-
+                            
                             <div class="mb-3">
-                                <button type="button" class="btn"
+                                <button type="button" class="btn" 
                                     x-bind:class="{
                                         'btn-danger': !formValid && !isVideoLoaded,
                                         'btn-success': formValid && !isVideoLoaded,
                                         'btn-secondary': isVideoLoaded
                                     }"
-                                    x-on:click="loadVideo()"
+                                    x-on:click="loadVideo()" 
                                     x-bind:disabled="!formValid || isVideoLoading || isVideoLoaded">
                                     <span x-show="!isVideoLoading && !isVideoLoaded">
                                         <i class="bi bi-play-circle me-2"></i>Load Video
@@ -138,12 +152,12 @@
                                     </span>
                                 </button>
                             </div>
-
+                            
                             <div class="mb-3">
                                 <label for="question" class="form-label">Question</label>
                                 <textarea class="form-control" id="question" rows="3" placeholder="Ask me something about this video" x-bind:disabled="isQuestionAsked || !isVideoLoaded"></textarea>
                             </div>
-
+                            
                             <div class="d-grid">
                                 <button type="button" class="btn btn-primary" x-on:click="askQuestion()" x-bind:disabled="!formValid || isQuestionLoading || isQuestionAsked || !isVideoLoaded">
                                     <span x-show="!isQuestionLoading">
@@ -155,20 +169,25 @@
                                 </button>
                             </div>
                         </form>
-
-                        <div class="mt-4" x-show="answer">
+                        
+                        <div class="mt-4" x-show="answer || streamingAnswer">
                             <h5 class="card-title">Answer:</h5>
                             <p class="card-text bg-light p-3 rounded" x-text="answer"></p>
-
-                            <div class="mt-3">
-                                <h5 class="mb-2">Was this answer helpful?</h5>
-                                <button class="btn btn-outline-success me-2" @click="submitFeedback('positive')">
-                                    <i class="bi bi-hand-thumbs-up"></i> Yes
-                                </button>
-                                <button class="btn btn-outline-danger" @click="submitFeedback('negative')">
-                                    <i class="bi bi-hand-thumbs-down"></i> No
-                                </button>
+                            <div x-show="streamingAnswer" class="text-center">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
                             </div>
+                        </div>
+                        
+                        <div class="mt-3" x-show="!streamingAnswer && answer">
+                            <h5 class="mb-2">Was this answer helpful?</h5>
+                            <button class="btn btn-outline-success me-2" @click="submitFeedback('positive')">
+                                <i class="bi bi-hand-thumbs-up"></i> Yes
+                            </button>
+                            <button class="btn btn-outline-danger" @click="submitFeedback('negative')">
+                                <i class="bi bi-hand-thumbs-down"></i> No
+                            </button>
                         </div>
                     </div>
                 </div>

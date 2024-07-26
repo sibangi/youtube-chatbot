@@ -1,6 +1,6 @@
 import os
 
-from flask import Flask, request, jsonify, render_template, send_file
+from flask import Flask, request, jsonify, render_template, send_file, Response
 
 from youtube_qa_app import YouTubeQAApp
 
@@ -15,22 +15,23 @@ def home():
     return render_template('index.html')
 
 
-@app.route('/ask', methods=['POST'])
-def ask_question():
-    data = request.json
-    if not data or 'youtube_url' not in data or 'question' not in data:
-        return jsonify({"error": "Missing youtube_url or question"}), 400
-
-    youtube_url = data['youtube_url']
-    question = data['question']
+@app.route('/ask_stream')
+def ask_question_stream():
+    youtube_url = request.args.get('youtube_url')
+    question = request.args.get('question')
     user_info = {
-        "nickname": data.get('nickname', 'Anonymous'),
-        "work_status": data.get('work_status', 'N/A'),
-        "gender": data.get('gender', 'N/A')
+        "first_name": request.args.get('first_name', ''),
+        "last_name": request.args.get('last_name', ''),
+        "work_status": request.args.get('work_status', 'N/A'),
+        "gender": request.args.get('gender', 'N/A')
     }
 
-    result = youtube_qa.process_question_headless(youtube_url, question, user_info)
-    return jsonify(result)
+    def generate():
+        for chunk in youtube_qa.process_question_stream(youtube_url, question, user_info):
+            yield f"data: {chunk}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return Response(generate(), content_type='text/event-stream')
 
 
 @app.route('/feedback', methods=['POST'])
