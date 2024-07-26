@@ -54,8 +54,7 @@ def ask_question_stream():
     youtube_url = request.args.get('youtube_url')
     question = request.args.get('question')
     user_info = {
-        "first_name": request.args.get('first_name', ''),
-        "last_name": request.args.get('last_name', ''),
+        "participant_id": request.args.get('participant_id', ''),
         "work_status": request.args.get('work_status', 'N/A'),
         "gender": request.args.get('gender', 'N/A')
     }
@@ -80,7 +79,13 @@ def submit_feedback():
     return jsonify(result)
 
 
-@app.route('/download_csv')
+@app.route('/admin')
+@login_required
+def admin():
+    return render_template('admin.html')
+
+
+@app.route('/admin/download_csv')
 @login_required
 def download_csv():
     csv_path = "qa_feedback_log.csv"
@@ -90,7 +95,7 @@ def download_csv():
         return jsonify({"error": "CSV file not found"}), 404
 
 
-@app.route('/reset_csv', methods=['POST'])
+@app.route('/admin/reset_csv', methods=['POST'])
 @login_required
 def reset_csv():
     csv_path = "qa_feedback_log.csv"

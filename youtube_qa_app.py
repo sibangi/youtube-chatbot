@@ -59,7 +59,7 @@ class YouTubeQAApp:
 
     def log_to_csv(self, feedback=None):
         filename = "qa_feedback_log.csv"
-        fieldnames = ["timestamp", "first_name", "last_name", "work_status", "gender", "question", "answer", "feedback"]
+        fieldnames = ["timestamp", "participant_id", "work_status", "gender", "question", "answer", "feedback"]
 
         file_exists = os.path.isfile(filename)
 
@@ -71,8 +71,7 @@ class YouTubeQAApp:
 
             writer.writerow({
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "first_name": self.user_info.get("first_name", "N/A"),
-                "last_name": self.user_info.get("last_name", "N/A"),
+                "participant_id": self.user_info.get("participant_id", "N/A"),
                 "work_status": self.user_info.get("work_status", "N/A"),
                 "gender": self.user_info.get("gender", "N/A"),
                 "question": self.current_question,
@@ -144,7 +143,7 @@ class YouTubeQAApp:
 
     def create_new_csv(self):
         filename = "qa_feedback_log.csv"
-        fieldnames = ["timestamp", "first_name", "last_name", "work_status", "gender", "question", "answer", "feedback"]
+        fieldnames = ["timestamp", "participant_id", "work_status", "gender", "question", "answer", "feedback"]
 
         with open(filename, 'w', newline='') as file:
             writer = csv.DictWriter(file, fieldnames=fieldnames)
