@@ -54,5 +54,17 @@ def download_csv():
         return jsonify({"error": "CSV file not found"}), 404
 
 
+@app.route('/reset_csv', methods=['POST'])
+def reset_csv():
+    csv_path = "qa_feedback_log.csv"
+    try:
+        if os.path.exists(csv_path):
+            os.remove(csv_path)
+        # Create a new CSV file with headers
+        youtube_qa.create_new_csv()
+        return jsonify({"message": "CSV file has been reset successfully"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
     app.run(debug=True)

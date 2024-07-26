@@ -142,6 +142,14 @@ class YouTubeQAApp:
 
         return {"message": "Feedback submitted successfully"}
 
+    def create_new_csv(self):
+        filename = "qa_feedback_log.csv"
+        fieldnames = ["timestamp", "first_name", "last_name", "work_status", "gender", "question", "answer", "feedback"]
+
+        with open(filename, 'w', newline='') as file:
+            writer = csv.DictWriter(file, fieldnames=fieldnames)
+            writer.writeheader()
+
 
 # This part is optional, you can remove it if you're not running this file directly
 if __name__ == "__main__":
