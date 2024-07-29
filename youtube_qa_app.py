@@ -17,6 +17,8 @@ class YouTubeQAApp:
         self.current_video_url = ""
         self.api_key = os.getenv("OPENAI_API_KEY")
         self.client = OpenAI(api_key=self.api_key)
+        self.feedback_provided = True  # Initialize as True to allow the first question
+        self.last_question_unrelated = False
 
     @staticmethod
     def extract_video_id(url):
@@ -47,7 +49,7 @@ class YouTubeQAApp:
                         "content": f"Here's the transcript from a YouTube video:\n\n{context}\n\nPlease answer the following question, primarily using information from the transcript. If the concept is mentioned but not fully explained, you can provide a brief general explanation:\n\n{question}"
                     },
                 ],
-                max_tokens=2000
+                max_tokens=200
             )
             return response.choices[0].message.content.strip()
         except Exception as e:
@@ -82,6 +84,10 @@ class YouTubeQAApp:
             })
 
     def process_question_stream(self, youtube_url, question, user_info=None):
+        if not self.feedback_provided and not self.last_question_unrelated:
+            yield "Please provide feedback for the previous question before asking a new one."
+            return
+
         self.user_info = user_info or {}
         self.current_video_url = youtube_url
         video_id = self.extract_video_id(youtube_url)
@@ -103,6 +109,11 @@ class YouTubeQAApp:
         # Check if the answer indicates the question is unrelated to the video
         if "This information is not provided in the video transcript" in self.current_answer:
             self.log_to_csv(feedback="N/A")
+            self.last_question_unrelated = True
+        else:
+            self.last_question_unrelated = False
+
+        self.feedback_provided = False
 
     def get_chatgpt_response_stream(self, question, context):
         if not self.api_key:
@@ -122,7 +133,7 @@ class YouTubeQAApp:
                         "content": f"Here's the transcript from a YouTube video:\n\n{context}\n\nPlease answer the following question, primarily using information from the transcript. If the concept is mentioned but not fully explained, you can provide a brief general explanation:\n\n{question}"
                     },
                 ],
-                max_tokens=200,
+                max_tokens=2000,
                 stream=True
             )
             for chunk in response:
@@ -142,6 +153,7 @@ class YouTubeQAApp:
 
         self.current_feedback = feedback
         self.log_to_csv(feedback)
+        self.feedback_provided = True
 
         return {"message": "Feedback submitted successfully"}
 
@@ -152,3 +164,9 @@ class YouTubeQAApp:
         with open(filename, 'w', newline='') as file:
             writer = csv.DictWriter(file, fieldnames=fieldnames)
             writer.writeheader()
+
+
+# This part is optional, you can remove it if you're not running this file directly
+if __name__ == "__main__":
+    print("This module is designed to be imported and used by other scripts.")
+    print("It contains the YouTubeQAApp class for processing YouTube video transcripts and answering questions.")
