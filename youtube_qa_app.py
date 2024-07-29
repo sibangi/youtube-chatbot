@@ -3,12 +3,14 @@ import logging
 import os
 import re
 import sys
+import time
 from datetime import datetime
 
 from openai import OpenAI
 from youtube_transcript_api import YouTubeTranscriptApi
+from ratelimit import limits, sleep_and_retry
 
-# Configure logging
+# Configure logging to print to console
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -34,6 +36,7 @@ class YouTubeQAApp:
         self.client = OpenAI(api_key=self.api_key)
         self.feedback_provided = True  # Initialize as True to allow the first question
         self.last_question_unrelated = False
+        self.transcript_cache = {}
         logger.info("YouTubeQAApp initialized successfully")
 
     @staticmethod
@@ -48,15 +51,25 @@ class YouTubeQAApp:
             logger.warning(f"Could not extract video ID from URL: {url}")
             return None
 
+    @sleep_and_retry
+    @limits(calls=1, period=5)  # Limit to 1 call every 5 seconds
     def get_transcript(self, video_id):
         logger.info(f"Fetching transcript for video ID: {video_id}")
+        if video_id in self.transcript_cache:
+            logger.info(f"Returning cached transcript for video ID: {video_id}")
+            return self.transcript_cache[video_id]
+
         try:
             transcript = YouTubeTranscriptApi.get_transcript(video_id)
+            transcript_text = " ".join([entry['text'] for entry in transcript])
+            self.transcript_cache[video_id] = transcript_text
             logger.info(f"Transcript fetched successfully for video ID: {video_id}")
-            return " ".join([entry['text'] for entry in transcript])
+            return transcript_text
         except Exception as e:
             logger.error(f"Error fetching transcript for video ID {video_id}: {str(e)}")
-            return f"Error: {str(e)}"
+            if "Too Many Requests" in str(e):
+                return "Error: YouTube is currently rate limiting our requests. Please try again in a few minutes."
+            return f"Error: Unable to fetch transcript. {str(e)}"
 
     def get_chatgpt_response(self, question, context):
         logger.info("Generating ChatGPT response")
@@ -66,6 +79,8 @@ class YouTubeQAApp:
 
         try:
             logger.info("Sending request to OpenAI API")
+            logger.info(f"Using model: gpt-4o-mini")
+            logger.info(f"Max tokens: 200")
             response = self.client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
@@ -84,6 +99,7 @@ class YouTubeQAApp:
             return response.choices[0].message.content.strip()
         except Exception as e:
             error_message = str(e)
+            logger.error(f"Full error details: {repr(e)}")
             if "401" in error_message:
                 logger.error(f"Authentication failed: {error_message}")
                 return "Authentication failed. Please check your API key and try again."
@@ -162,7 +178,6 @@ class YouTubeQAApp:
 
     def get_chatgpt_response_stream(self, question, context):
         logger.info("Generating streaming ChatGPT response")
-
         if not self.api_key:
             logger.error("API key is not set")
             yield "API key is not set. Please set the OPENAI_API_KEY environment variable to use this feature."
@@ -193,6 +208,7 @@ class YouTubeQAApp:
             logger.info("Completed streaming response from OpenAI API")
         except Exception as e:
             error_message = str(e)
+            logger.error(f"Full error details: {repr(e)}")
             if "401" in error_message:
                 logger.error(f"Authentication failed: {error_message}")
                 yield "Authentication failed. Please check your API key and try again."
