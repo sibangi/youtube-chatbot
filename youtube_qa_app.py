@@ -47,7 +47,7 @@ class YouTubeQAApp:
                         "content": f"Here's the transcript from a YouTube video:\n\n{context}\n\nPlease answer the following question, primarily using information from the transcript. If the concept is mentioned but not fully explained, you can provide a brief general explanation:\n\n{question}"
                     },
                 ],
-                max_tokens=200
+                max_tokens=2000
             )
             return response.choices[0].message.content.strip()
         except Exception as e:
