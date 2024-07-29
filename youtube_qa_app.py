@@ -1,18 +1,23 @@
 import csv
+import logging
 import os
 import re
-import logging
+import sys
 from datetime import datetime
 
 from openai import OpenAI
 from youtube_transcript_api import YouTubeTranscriptApi
 
 # Configure logging
-logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                    filename='youtube_qa_app.log',
-                    filemode='a')
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
 logger = logging.getLogger(__name__)
+
 
 class YouTubeQAApp:
     def __init__(self):
@@ -89,7 +94,8 @@ class YouTubeQAApp:
     def log_to_csv(self, feedback=None):
         logger.info("Logging interaction to CSV")
         filename = "qa_feedback_log.csv"
-        fieldnames = ["timestamp", "participant_id", "work_status", "gender", "video_url", "question", "answer", "feedback"]
+        fieldnames = ["timestamp", "participant_id", "work_status", "gender", "video_url", "question", "answer",
+                      "feedback"]
 
         file_exists = os.path.isfile(filename)
 
@@ -156,6 +162,7 @@ class YouTubeQAApp:
 
     def get_chatgpt_response_stream(self, question, context):
         logger.info("Generating streaming ChatGPT response")
+
         if not self.api_key:
             logger.error("API key is not set")
             yield "API key is not set. Please set the OPENAI_API_KEY environment variable to use this feature."
@@ -163,6 +170,8 @@ class YouTubeQAApp:
 
         try:
             logger.info("Sending streaming request to OpenAI API")
+            logger.info(f"Using model: gpt-4o-mini")
+            logger.info(f"Max tokens: 2000")
             response = self.client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
@@ -206,7 +215,8 @@ class YouTubeQAApp:
     def create_new_csv(self):
         logger.info("Creating new CSV file")
         filename = "qa_feedback_log.csv"
-        fieldnames = ["timestamp", "participant_id", "work_status", "gender", "video_url", "question", "answer", "feedback"]
+        fieldnames = ["timestamp", "participant_id", "work_status", "gender", "video_url", "question", "answer",
+                      "feedback"]
 
         try:
             with open(filename, 'w', newline='') as file:
