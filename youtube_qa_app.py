@@ -14,6 +14,7 @@ class YouTubeQAApp:
         self.current_answer = ""
         self.user_info = {}
         self.current_feedback = None
+        self.current_video_url = ""
         self.api_key = os.getenv("OPENAI_API_KEY")
         self.client = OpenAI(api_key=self.api_key)
 
@@ -39,14 +40,14 @@ class YouTubeQAApp:
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are an AI assistant that only answers questions based on the provided YouTube video transcript. You must not use any external knowledge or information not present in the transcript. If the question cannot be answered using only the information in the transcript, respond with 'This information is not provided in the video transcript.'"
+                        "content": "You are an AI assistant that answers questions based on the provided YouTube video transcript. While you should prioritize information from the transcript, you can also provide general explanations for concepts mentioned in the video, even if they're not explicitly defined. If a question is completely unrelated to the video content, politely redirect the user to ask about topics covered in the video."
                     },
                     {
                         "role": "user",
-                        "content": f"Here's the transcript from a YouTube video:\n\n{context}\n\nBased solely on this transcript, please answer the following question. Remember, only use information from the transcript. If the information isn't in the transcript, say so:\n\n{question}"
+                        "content": f"Here's the transcript from a YouTube video:\n\n{context}\n\nPlease answer the following question, primarily using information from the transcript. If the concept is mentioned but not fully explained, you can provide a brief general explanation:\n\n{question}"
                     },
                 ],
-                max_tokens=150
+                max_tokens=200
             )
             return response.choices[0].message.content.strip()
         except Exception as e:
@@ -59,7 +60,7 @@ class YouTubeQAApp:
 
     def log_to_csv(self, feedback=None):
         filename = "qa_feedback_log.csv"
-        fieldnames = ["timestamp", "participant_id", "work_status", "gender", "question", "answer", "feedback"]
+        fieldnames = ["timestamp", "participant_id", "work_status", "gender", "video_url", "question", "answer", "feedback"]
 
         file_exists = os.path.isfile(filename)
 
@@ -70,10 +71,11 @@ class YouTubeQAApp:
                 writer.writeheader()
 
             writer.writerow({
-                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "timestamp": datetime.now().strftime("%Y-%m-d %H:%M:%S"),
                 "participant_id": self.user_info.get("participant_id", "N/A"),
                 "work_status": self.user_info.get("work_status", "N/A"),
                 "gender": self.user_info.get("gender", "N/A"),
+                "video_url": self.current_video_url,
                 "question": self.current_question,
                 "answer": self.current_answer,
                 "feedback": feedback or "N/A"
@@ -81,6 +83,7 @@ class YouTubeQAApp:
 
     def process_question_stream(self, youtube_url, question, user_info=None):
         self.user_info = user_info or {}
+        self.current_video_url = youtube_url
         video_id = self.extract_video_id(youtube_url)
         if not video_id:
             yield "Error: Invalid YouTube URL"
@@ -97,8 +100,9 @@ class YouTubeQAApp:
             self.current_answer += chunk
             yield chunk
 
-        # Log the interaction without feedback initially
-        self.log_to_csv()
+        # Check if the answer indicates the question is unrelated to the video
+        if "This information is not provided in the video transcript" in self.current_answer:
+            self.log_to_csv(feedback="N/A")
 
     def get_chatgpt_response_stream(self, question, context):
         if not self.api_key:
@@ -111,14 +115,14 @@ class YouTubeQAApp:
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are an AI assistant that only answers questions based on the provided YouTube video transcript. You must not use any external knowledge or information not present in the transcript. If the question cannot be answered using only the information in the transcript, respond with 'This information is not provided in the video transcript.'"
+                        "content": "You are an AI assistant that answers questions based on the provided YouTube video transcript. While you should prioritize information from the transcript, you can also provide general explanations for concepts mentioned in the video, even if they're not explicitly defined. If a question is completely unrelated to the video content, politely redirect the user to ask about topics covered in the video."
                     },
                     {
                         "role": "user",
-                        "content": f"Here's the transcript from a YouTube video:\n\n{context}\n\nBased solely on this transcript, please answer the following question. Remember, only use information from the transcript. If the information isn't in the transcript, say so:\n\n{question}"
+                        "content": f"Here's the transcript from a YouTube video:\n\n{context}\n\nPlease answer the following question, primarily using information from the transcript. If the concept is mentioned but not fully explained, you can provide a brief general explanation:\n\n{question}"
                     },
                 ],
-                max_tokens=150,
+                max_tokens=200,
                 stream=True
             )
             for chunk in response:
@@ -143,14 +147,8 @@ class YouTubeQAApp:
 
     def create_new_csv(self):
         filename = "qa_feedback_log.csv"
-        fieldnames = ["timestamp", "participant_id", "work_status", "gender", "question", "answer", "feedback"]
+        fieldnames = ["timestamp", "participant_id", "work_status", "gender", "video_url", "question", "answer", "feedback"]
 
         with open(filename, 'w', newline='') as file:
             writer = csv.DictWriter(file, fieldnames=fieldnames)
             writer.writeheader()
-
-
-# This part is optional, you can remove it if you're not running this file directly
-if __name__ == "__main__":
-    print("This module is designed to be imported and used by other scripts.")
-    print("It contains the YouTubeQAApp class for processing YouTube video transcripts and answering questions.")
