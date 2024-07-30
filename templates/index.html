@@ -4,12 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Video Q&A</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <style>
+        body { background-color: #f8f9fa; }
+        .form-container { max-width: 800px; }
+        .btn-custom { transition: all 0.3s; }
+        .btn-custom:disabled { background-color: #dc3545; border-color: #dc3545; }
+        .btn-custom.loading { background-color: #ffc107; border-color: #ffc107; }
+        .btn-custom.enabled { background-color: #198754; border-color: #198754; }
+        .feedback-icon { cursor: pointer; }
+    </style>
 </head>
-<body class="bg-gray-100">
-    <div class="container mx-auto py-5" x-data="{
+<body>
+    <div class="container py-5" x-data="{
         isVideoLoading: false,
         isVideoLoaded: false,
         isQuestionLoading: false,
@@ -27,7 +36,6 @@
         async loadVideo() {
             if (this.isVideoLoaded) return;
             this.isVideoLoading = true;
-            // Simulating video loading
             await new Promise(resolve => setTimeout(resolve, 2000));
             this.isVideoLoading = false;
             this.isVideoLoaded = true;
@@ -89,124 +97,95 @@
             }
         }
     }" x-init="checkFormValidity">
-        <div class="row justify-content-center">
-            <div class="col-md-8">
-                <div class="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
-                    <h1 class="text-2xl font-bold text-center mb-4">Video Q&A</h1>
+        <div class="form-container mx-auto bg-white shadow-lg rounded-lg p-4">
+            <h1 class="text-center mb-4">Video Q&A</h1>
 
-                    <div class="mb-4">
-                        <label class="block text-gray-700 text-sm font-bold mb-2" for="participant_id">
-                            Participant ID
-                        </label>
-                        <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="participant_id" type="text" placeholder="Enter Participant ID" @input="checkFormValidity()">
-                    </div>
+            <div class="mb-3">
+                <label for="participant_id" class="form-label">Participant ID</label>
+                <input type="text" class="form-control" id="participant_id" placeholder="Enter Participant ID" x-on:input="checkFormValidity">
+            </div>
 
-                    <div class="mb-4">
-                        <label class="block text-gray-700 text-sm font-bold mb-2" for="work_status">
-                            Work Status
-                        </label>
-                        <select class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="work_status" @change="checkFormValidity()">
-                            <option value="">Select...</option>
-                            <option value="Student">Student</option>
-                            <option value="Staff">Staff</option>
-                        </select>
-                    </div>
+            <div class="mb-3">
+                <label for="work_status" class="form-label">Work Status</label>
+                <select class="form-select" id="work_status" x-on:change="checkFormValidity">
+                    <option value="">Select...</option>
+                    <option value="student">Student</option>
+                    <option value="staff">Staff</option>
+                </select>
+            </div>
 
-                    <div class="mb-4">
-                        <label class="block text-gray-700 text-sm font-bold mb-2" for="gender">
-                            Gender
-                        </label>
-                        <select class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="gender" @change="checkFormValidity()">
-                            <option value="">Select...</option>
-                            <option value="Male">Male</option>
-                            <option value="Female">Female</option>
-                            <option value="Other">Other</option>
-                        </select>
-                    </div>
+            <div class="mb-3">
+                <label for="gender" class="form-label">Gender</label>
+                <select class="form-select" id="gender" x-on:change="checkFormValidity">
+                    <option value="">Select...</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="other">Other</option>
+                </select>
+            </div>
 
-                    <div class="mb-4">
-                        <label class="block text-gray-700 text-sm font-bold mb-2" for="youtube_url">
-                            YouTube URL
-                        </label>
-                        <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="youtube_url" type="text" placeholder="Enter YouTube URL" @input="checkFormValidity()">
-                    </div>
+            <div class="mb-3">
+                <label for="youtube_url" class="form-label">YouTube URL</label>
+                <input type="text" class="form-control" id="youtube_url" placeholder="Enter YouTube URL" x-on:input="checkFormValidity">
+            </div>
 
-                    <div class="mb-4">
-                        <button
-                            @click="loadVideo"
-                            x-show="!isVideoLoading && !isVideoLoaded"
-                            :class="{'bg-red-500': !formValid, 'bg-blue-500': formValid, 'hover:bg-blue-700': formValid}"
-                            class="w-full text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-                            :disabled="!formValid">
-                            Load Video
-                        </button>
-                        <button
-                            x-show="isVideoLoading"
-                            class="w-full bg-yellow-500 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-                            disabled>
-                            Loading Video...
-                        </button>
-                        <button
-                            x-show="isVideoLoaded"
-                            class="w-full bg-green-500 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-                            disabled>
-                            Video Loaded
-                        </button>
-                    </div>
+            <button class="btn btn-custom w-100 mb-3"
+                    x-on:click="loadVideo"
+                    x-bind:disabled="!formValid || isVideoLoaded"
+                    x-bind:class="{'loading': isVideoLoading, 'enabled': formValid && !isVideoLoaded && !isVideoLoading}">
+                <span x-show="!isVideoLoading && !isVideoLoaded">Load Video</span>
+                <span x-show="isVideoLoading">
+                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                    Loading Video...
+                </span>
+                <span x-show="isVideoLoaded">Video Loaded</span>
+            </button>
 
-                    <div class="mb-4">
-                        <label class="block text-gray-700 text-sm font-bold mb-2" for="question">
-                            Question
-                        </label>
-                        <textarea
-                            class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                            id="question"
-                            placeholder="Enter your question"
-                            :disabled="!feedbackProvided && isQuestionAsked"
-                        ></textarea>
-                    </div>
+            <div class="mb-3">
+                <label for="question" class="form-label">Question</label>
+                <textarea class="form-control" id="question" rows="3" placeholder="Enter your question"
+                          x-bind:disabled="!isVideoLoaded || !feedbackProvided"></textarea>
+                <small class="text-danger" x-show="!isVideoLoaded">
+                    Please load a video before asking a question.
+                </small>
+                <small class="text-danger" x-show="isVideoLoaded && !feedbackProvided">
+                    Please provide feedback on the previous answer before asking a new question.
+                </small>
+            </div>
 
-                    <div class="mb-4">
-                        <button
-                            @click="askQuestion"
-                            x-show="!isQuestionLoading"
-                            :class="{'bg-red-500': !isVideoLoaded || !feedbackProvided, 'bg-green-500': isVideoLoaded && feedbackProvided, 'hover:bg-green-700': isVideoLoaded && feedbackProvided}"
-                            class="w-full text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-                            :disabled="!isVideoLoaded || !feedbackProvided">
-                            Ask Question
-                        </button>
-                        <button
-                            x-show="isQuestionLoading"
-                            class="w-full bg-yellow-500 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-                            disabled>
-                            Processing Question...
-                        </button>
-                    </div>
+            <button class="btn btn-custom w-100"
+                    x-on:click="askQuestion"
+                    x-bind:disabled="!formValid || !isVideoLoaded || isQuestionLoading || !feedbackProvided"
+                    x-bind:class="{'loading': isQuestionLoading, 'enabled': formValid && isVideoLoaded && !isQuestionLoading && feedbackProvided}">
+                <span x-show="!isQuestionLoading">Ask Question</span>
+                <span x-show="isQuestionLoading">
+                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                    Processing Question...
+                </span>
+            </button>
 
-                    <div class="mt-4" x-show="answer || streamingAnswer">
-                        <h5 class="font-bold mb-2">Answer:</h5>
-                        <p x-text="answer"></p>
-                        <div class="text-center" x-show="streamingAnswer">
-                            <div class="spinner-border text-primary" role="status">
-                                <span class="sr-only">Loading...</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="mt-3" x-show="!streamingAnswer && answer">
-                        <h5 class="font-bold mb-2">Was this answer helpful?</h5>
-                        <div class="flex justify-center space-x-4">
-                            <button @click="submitFeedback('positive')" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
-                                <i class="fas fa-thumbs-up mr-2"></i> Yes
-                            </button>
-                            <button @click="submitFeedback('negative')" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
-                                <i class="fas fa-thumbs-down mr-2"></i> No
-                            </button>
+            <div class="mt-4" x-show="answer || streamingAnswer">
+                <h5 class="mb-2">Answer:</h5>
+                <div class="p-3 bg-light rounded">
+                    <p x-text="answer"></p>
+                    <div class="text-center" x-show="streamingAnswer">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
                         </div>
                     </div>
                 </div>
             </div>
+
+            <div class="mt-3" x-show="!streamingAnswer && answer">
+                <h5 class="mb-2">Was this answer helpful?</h5>
+                <div class="d-flex justify-content-center">
+                    <i class="bi bi-hand-thumbs-up feedback-icon me-3 text-success" x-on:click="submitFeedback('yes')" style="font-size: 2rem;"></i>
+                    <i class="bi bi-hand-thumbs-down feedback-icon text-danger" x-on:click="submitFeedback('no')" style="font-size: 2rem;"></i>
+                </div>
+            </div>
         </div>
     </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
