@@ -3,11 +3,13 @@ import logging
 import os
 import re
 import sys
-import time
+import json
+import hashlib
 from datetime import datetime
 
 from openai import OpenAI
-from youtube_transcript_api import YouTubeTranscriptApi
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 from ratelimit import limits, sleep_and_retry
 
 # Configure logging to print to console
@@ -30,13 +32,18 @@ class YouTubeQAApp:
         self.user_info = {}
         self.current_feedback = None
         self.current_video_url = ""
-        self.api_key = os.getenv("OPENAI_API_KEY")
-        if not self.api_key:
+        self.openai_api_key = os.getenv("OPENAI_API_KEY")
+        self.youtube_api_key = os.getenv("YOUTUBE_API_KEY")
+        if not self.openai_api_key:
             logger.warning("OpenAI API key not set")
-        self.client = OpenAI(api_key=self.api_key)
-        self.feedback_provided = True  # Initialize as True to allow the first question
+        if not self.youtube_api_key:
+            logger.warning("YouTube API key not set")
+        self.client = OpenAI(api_key=self.openai_api_key)
+        self.youtube = build('youtube', 'v3', developerKey=self.youtube_api_key)
+        self.feedback_provided = True
         self.last_question_unrelated = False
-        self.transcript_cache = {}
+        self.cache_dir = "transcript_cache"
+        os.makedirs(self.cache_dir, exist_ok=True)
         logger.info("YouTubeQAApp initialized successfully")
 
     @staticmethod
@@ -51,30 +58,70 @@ class YouTubeQAApp:
             logger.warning(f"Could not extract video ID from URL: {url}")
             return None
 
+    def get_cache_filename(self, video_id):
+        return os.path.join(self.cache_dir, f"{video_id}.json")
+
+    def get_transcript_from_cache(self, video_id):
+        cache_file = self.get_cache_filename(video_id)
+        if os.path.exists(cache_file):
+            with open(cache_file, 'r') as f:
+                cached_data = json.load(f)
+            logger.info(f"Transcript loaded from cache for video ID: {video_id}")
+            return cached_data['transcript']
+        return None
+
+    def save_transcript_to_cache(self, video_id, transcript):
+        cache_file = self.get_cache_filename(video_id)
+        with open(cache_file, 'w') as f:
+            json.dump({'video_id': video_id, 'transcript': transcript}, f)
+        logger.info(f"Transcript saved to cache for video ID: {video_id}")
+
     @sleep_and_retry
-    @limits(calls=1, period=5)  # Limit to 1 call every 5 seconds
-    def get_transcript(self, video_id):
-        logger.info(f"Fetching transcript for video ID: {video_id}")
-        if video_id in self.transcript_cache:
-            logger.info(f"Returning cached transcript for video ID: {video_id}")
-            return self.transcript_cache[video_id]
+    @limits(calls=1, period=5)  # Adjust as needed based on API limits
+    def get_transcript(self, video_url):
+        logger.info(f"Fetching transcript for video URL: {video_url}")
+        video_id = self.extract_video_id(video_url)
+        if not video_id:
+            return "Error: Invalid YouTube URL"
+
+        cached_transcript = self.get_transcript_from_cache(video_id)
+        if cached_transcript:
+            return cached_transcript
 
         try:
-            transcript = YouTubeTranscriptApi.get_transcript(video_id)
-            transcript_text = " ".join([entry['text'] for entry in transcript])
-            self.transcript_cache[video_id] = transcript_text
-            logger.info(f"Transcript fetched successfully for video ID: {video_id}")
-            return transcript_text
+            captions = self.youtube.captions().list(
+                part='snippet',
+                videoId=video_id
+            ).execute()
+
+            if not captions.get('items'):
+                return "Error: No captions found for this video"
+
+            caption_id = captions['items'][0]['id']
+            subtitle = self.youtube.captions().download(
+                id=caption_id,
+                tfmt='srt'
+            ).execute()
+
+            transcript = self.srt_to_plain_text(subtitle.decode('utf-8'))
+            self.save_transcript_to_cache(video_id, transcript)
+            return transcript
+
+        except HttpError as e:
+            logger.error(f"HTTP error occurred: {e}")
+            return f"Error: {e}"
         except Exception as e:
             logger.error(f"Error fetching transcript for video ID {video_id}: {str(e)}")
-            if "Too Many Requests" in str(e):
-                return "Error: YouTube is currently rate limiting our requests. Please try again in a few minutes."
             return f"Error: Unable to fetch transcript. {str(e)}"
+
+    def srt_to_plain_text(self, srt_string):
+        lines = srt_string.strip().split('\n')
+        return ' '.join(line for line in lines if not line.isdigit() and '-->' not in line).replace('\r', '')
 
     def get_chatgpt_response(self, question, context):
         logger.info("Generating ChatGPT response")
-        if not self.api_key:
-            logger.error("API key is not set")
+        if not self.openai_api_key:
+            logger.error("OpenAI API key is not set")
             return "API key is not set. Please set the OPENAI_API_KEY environment variable to use this feature."
 
         try:
@@ -146,24 +193,19 @@ class YouTubeQAApp:
 
         self.user_info = user_info or {}
         self.current_video_url = youtube_url
-        video_id = self.extract_video_id(youtube_url)
-        if not video_id:
-            logger.error(f"Invalid YouTube URL: {youtube_url}")
-            yield "Error: Invalid YouTube URL"
-            return
+        self.current_question = question
+        self.current_answer = ""
 
-        self.transcript = self.get_transcript(video_id)
+        self.transcript = self.get_transcript(youtube_url)
         if self.transcript.startswith("Error"):
             logger.error(f"Error getting transcript: {self.transcript}")
             yield self.transcript
             return
 
-        self.current_question = question
-        self.current_answer = ""
         logger.info("Streaming ChatGPT response")
-        for chunk in self.get_chatgpt_response_stream(question, self.transcript):
-            self.current_answer += chunk
-            yield chunk
+        response = self.get_chatgpt_response(question, self.transcript)
+        self.current_answer = response
+        yield response
 
         # Check if the answer indicates the question is unrelated to the video
         if "This information is not provided in the video transcript" in self.current_answer:
@@ -175,46 +217,6 @@ class YouTubeQAApp:
 
         self.feedback_provided = False
         logger.info("Question processing completed")
-
-    def get_chatgpt_response_stream(self, question, context):
-        logger.info("Generating streaming ChatGPT response")
-        if not self.api_key:
-            logger.error("API key is not set")
-            yield "API key is not set. Please set the OPENAI_API_KEY environment variable to use this feature."
-            return
-
-        try:
-            logger.info("Sending streaming request to OpenAI API")
-            logger.info(f"Using model: gpt-4o-mini")
-            logger.info(f"Max tokens: 2000")
-            response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an AI assistant that answers questions based on the provided YouTube video transcript. While you should prioritize information from the transcript, you can also provide general explanations for concepts mentioned in the video, even if they're not explicitly defined. If a question is completely unrelated to the video content, politely redirect the user to ask about topics covered in the video."
-                    },
-                    {
-                        "role": "user",
-                        "content": f"Here's the transcript from a YouTube video:\n\n{context}\n\nPlease answer the following question, primarily using information from the transcript. If the concept is mentioned but not fully explained, you can provide a brief general explanation:\n\n{question}"
-                    },
-                ],
-                max_tokens=2000,
-                stream=True
-            )
-            for chunk in response:
-                if chunk.choices[0].delta.content is not None:
-                    yield chunk.choices[0].delta.content
-            logger.info("Completed streaming response from OpenAI API")
-        except Exception as e:
-            error_message = str(e)
-            logger.error(f"Full error details: {repr(e)}")
-            if "401" in error_message:
-                logger.error(f"Authentication failed: {error_message}")
-                yield "Authentication failed. Please check your API key and try again."
-            else:
-                logger.error(f"Error in API response: {error_message}")
-                yield f"Sorry, I couldn't generate an answer. Error: {error_message}"
 
     def submit_feedback(self, feedback):
         logger.info(f"Submitting feedback: {feedback}")
