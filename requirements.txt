@@ -1,7 +1,10 @@
-youtube_transcript_api==0.6.2
 openai==1.40.1
 flask==3.0.3
 urllib3~=2.2.2
 gunicorn==22.0.0
 ratelimit==2.2.1
-google-api-python-client==2.140.0
+assemblyai==0.31.0
+yt-dlp==2024.8.6
+
+
+

@@ -1,8 +1,6 @@
 import os
 from functools import wraps
-
-from flask import Flask, request, jsonify, render_template, send_file, Response, session, redirect, url_for
-
+from flask import Flask, request, jsonify, render_template, send_file, Response, session, redirect, url_for, stream_with_context
 from youtube_qa_app import YouTubeQAApp
 
 app = Flask(__name__)
@@ -11,7 +9,6 @@ app.secret_key = os.urandom(24)  # Set a secret key for session management
 # Create an instance of YouTubeQAApp
 youtube_qa = YouTubeQAApp()
 
-
 # Authentication decorator
 def login_required(f):
     @wraps(f)
@@ -19,9 +16,7 @@ def login_required(f):
         if 'logged_in' not in session:
             return redirect(url_for('login'))
         return f(*args, **kwargs)
-
     return decorated_function
-
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -35,18 +30,34 @@ def login():
             return render_template('login.html', error='Invalid credentials')
     return render_template('login.html')
 
-
 @app.route('/logout')
 def logout():
     session.pop('logged_in', None)
     return redirect(url_for('login'))
-
 
 @app.route('/')
 @login_required
 def home():
     return render_template('index.html')
 
+@app.route('/load_video', methods=['POST'])
+@login_required
+def load_video():
+    youtube_url = request.json.get('youtube_url')
+
+    def generate():
+        for progress in youtube_qa.process_video(youtube_url):
+            if isinstance(progress, tuple):
+                if progress[0] == 'download':
+                    yield f"download:{progress[1]}\n"
+                elif progress[0] == 'transcribe':
+                    yield f"transcribe:{progress[1]}\n"
+            elif progress == "done":
+                yield "done\n"
+            else:
+                yield f"{progress}\n"
+
+    return Response(stream_with_context(generate()), content_type='text/plain')
 
 @app.route('/ask_stream')
 @login_required
@@ -66,7 +77,6 @@ def ask_question_stream():
 
     return Response(generate(), content_type='text/event-stream')
 
-
 @app.route('/feedback', methods=['POST'])
 @login_required
 def submit_feedback():
@@ -78,12 +88,10 @@ def submit_feedback():
     result = youtube_qa.submit_feedback(feedback)
     return jsonify(result)
 
-
 @app.route('/admin')
 @login_required
 def admin():
     return render_template('admin.html')
-
 
 @app.route('/admin/download_csv')
 @login_required
@@ -93,21 +101,6 @@ def download_csv():
         return send_file(csv_path, as_attachment=True, download_name="qa_feedback_log.csv")
     else:
         return jsonify({"error": "CSV file not found"}), 404
-
-
-@app.route('/admin/reset_csv', methods=['POST'])
-@login_required
-def reset_csv():
-    csv_path = "qa_feedback_log.csv"
-    try:
-        if os.path.exists(csv_path):
-            os.remove(csv_path)
-        # Create a new CSV file with headers
-        youtube_qa.create_new_csv()
-        return jsonify({"message": "CSV file has been reset successfully"})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
 
 if __name__ == '__main__':
     app.run(debug=True)

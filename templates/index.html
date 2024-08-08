@@ -27,6 +27,8 @@
         formValid: false,
         streamingAnswer: false,
         feedbackProvided: true,
+        downloadProgress: 0,
+        transcribeProgress: 0,
         checkFormValidity() {
             this.formValid = document.getElementById('participant_id').value.trim() !== '' &&
                              document.getElementById('work_status').value !== '' &&
@@ -36,9 +38,50 @@
         async loadVideo() {
             if (this.isVideoLoaded) return;
             this.isVideoLoading = true;
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            this.isVideoLoading = false;
-            this.isVideoLoaded = true;
+            this.downloadProgress = 0;
+            this.transcribeProgress = 0;
+
+            try {
+                const response = await fetch('/load_video', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        youtube_url: document.getElementById('youtube_url').value
+                    })
+                });
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+
+                    const decodedChunk = decoder.decode(value, { stream: true });
+                    const lines = decodedChunk.split('\n');
+
+                    for (const line of lines) {
+                        if (line.startsWith('download:')) {
+                            this.downloadProgress = parseInt(line.split(':')[1]);
+                        } else if (line.startsWith('transcribe:')) {
+                            this.transcribeProgress = parseInt(line.split(':')[1]);
+                        } else if (line === 'done') {
+                            this.isVideoLoading = false;
+                            this.isVideoLoaded = true;
+                        } else if (line.startsWith('Error:')) {
+                            alert(line);
+                            this.isVideoLoading = false;
+                            return;
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred while loading the video.');
+                this.isVideoLoading = false;
+            }
         },
         async askQuestion() {
             if (!this.formValid || !this.isVideoLoaded || !this.feedbackProvided) return;
@@ -140,6 +183,20 @@
                 </span>
                 <span x-show="isVideoLoaded">Video Loaded</span>
             </button>
+
+            <div x-show="isVideoLoading" class="mb-3">
+                <label class="form-label">Downloading:</label>
+                <div class="progress">
+                    <div class="progress-bar" role="progressbar" :style="'width: ' + downloadProgress + '%'" :aria-valuenow="downloadProgress" aria-valuemin="0" aria-valuemax="100" x-text="downloadProgress + '%'"></div>
+                </div>
+            </div>
+
+            <div x-show="isVideoLoading" class="mb-3">
+                <label class="form-label">Transcribing:</label>
+                <div class="progress">
+                    <div class="progress-bar" role="progressbar" :style="'width: ' + transcribeProgress + '%'" :aria-valuenow="transcribeProgress" aria-valuemin="0" aria-valuemax="100" x-text="transcribeProgress + '%'"></div>
+                </div>
+            </div>
 
             <div class="mb-3">
                 <label for="question" class="form-label">Question</label>
