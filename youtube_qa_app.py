@@ -93,10 +93,40 @@ class YouTubeQAApp:
             return "Error: Invalid YouTube URL"
 
         output_template = os.path.join(self.download_dir, f"{video_id}.%(ext)s")
+
+        # Try different browser cookies in order of preference
+        browsers = ['chrome', 'firefox', 'safari', 'edge']
+
+        for browser in browsers:
+            ydl_opts = {
+                'format': 'm4a/bestaudio/best',
+                'outtmpl': output_template,
+                'progress_hooks': [self.download_progress_hook],
+                'cookiesfrombrowser': (browser,),
+                'quiet': True,
+                'no_warnings': True,
+            }
+
+            try:
+                logger.info(f"Attempting download with {browser} cookies...")
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(video_url, download=True)
+                    filename = ydl.prepare_filename(info)
+                logger.info(f"Audio downloaded successfully using {browser} cookies: {filename}")
+                return filename
+            except Exception as e:
+                logger.warning(f"Failed with {browser} cookies: {str(e)}")
+                continue
+
+        # If all browsers fail, try without cookies but with additional options
+        logger.info("Trying download without cookies but with additional options...")
         ydl_opts = {
             'format': 'm4a/bestaudio/best',
             'outtmpl': output_template,
             'progress_hooks': [self.download_progress_hook],
+            'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
+            'quiet': True,
+            'no_warnings': True,
         }
 
         try:
