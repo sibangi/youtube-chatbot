@@ -234,7 +234,7 @@ class YouTubeQAApp:
                     writer.writeheader()
 
                 writer.writerow({
-                    "timestamp": datetime.now().strftime("%Y-%m-d %H:%M:%S"),
+                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "participant_id": self.user_info.get("participant_id", "N/A"),
                     "work_status": self.user_info.get("work_status", "N/A"),
                     "gender": self.user_info.get("gender", "N/A"),

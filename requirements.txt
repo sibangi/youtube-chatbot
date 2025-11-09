@@ -1,10 +1,11 @@
-openai==1.40.1
-flask==3.0.3
-urllib3~=2.2.2
-gunicorn==22.0.0
+flask==3.1.0
+flask-cors==5.0.0
+openai==1.54.5
+yt-dlp==2024.11.4
+pydub==0.25.1
+tiktoken==0.8.0
+python-dotenv==1.0.1
+assemblyai==0.34.1
 ratelimit==2.2.1
-assemblyai==0.31.0
-yt-dlp==2024.8.6
-
 
 
