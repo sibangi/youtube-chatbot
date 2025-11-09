@@ -7,5 +7,6 @@ tiktoken==0.8.0
 python-dotenv==1.0.1
 assemblyai==0.46.0
 ratelimit==2.2.1
+gunicorn==23.0.0
 
 
