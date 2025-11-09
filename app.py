@@ -38,7 +38,9 @@ def logout():
 @app.route('/')
 @login_required
 def home():
-    return render_template('index.html')
+    default_video_url = os.getenv('DEFAULT_VIDEO_URL', '')
+    offline_mode = os.getenv('OFFLINE_MODE', '0').lower() in ('1','true','yes')
+    return render_template('index.html', default_video_url=default_video_url, offline_mode=offline_mode)
 
 @app.route('/load_video', methods=['POST'])
 @login_required

@@ -5,7 +5,11 @@ This script loads environment variables and runs the Flask app in debug mode
 """
 
 import os
+import warnings
 from dotenv import load_dotenv
+
+# Suppress urllib3 OpenSSL warning on macOS
+warnings.filterwarnings('ignore', message='urllib3 v2 only supports OpenSSL 1.1.1+')
 
 # Load environment variables from .env file
 load_dotenv()

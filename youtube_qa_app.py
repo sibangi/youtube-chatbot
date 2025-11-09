@@ -11,6 +11,8 @@ import assemblyai as aai
 import yt_dlp
 from openai import OpenAI
 from ratelimit import limits, sleep_and_retry
+import base64
+import tempfile
 
 # Configure logging to print to console
 logging.basicConfig(
@@ -47,7 +49,61 @@ class YouTubeQAApp:
         self.download_dir = "audio_downloads"
         os.makedirs(self.cache_dir, exist_ok=True)
         os.makedirs(self.download_dir, exist_ok=True)
+
+        # Environment and cookies configuration
+        self.is_server = bool(os.getenv("RENDER") or os.getenv("RENDER_SERVICE_ID") or os.getenv("RENDER_EXTERNAL_URL"))
+        self.enable_browser_cookies = os.getenv("ENABLE_BROWSER_COOKIES", "0").lower() in ("1", "true", "yes")
+        self.offline_mode = os.getenv("OFFLINE_MODE", "0").lower() in ("1", "true", "yes")
+        self.cookies_file = None
+        self._prepare_cookies()
         logger.info("YouTubeQAApp initialized successfully")
+
+    def _prepare_cookies(self):
+        """
+        Prepare a cookies file for yt-dlp based on environment variables.
+        Supported env vars:
+          - YTDLP_COOKIES_FILE: path to a Netscape cookie file
+          - YTDLP_COOKIES: raw Netscape cookie content (string)
+          - YTDLP_COOKIES_B64: base64-encoded Netscape cookie content
+        """
+        try:
+            cookies_path = os.getenv("YTDLP_COOKIES_FILE")
+            cookies_raw = os.getenv("YTDLP_COOKIES")
+            cookies_b64 = os.getenv("YTDLP_COOKIES_B64")
+
+            # Prefer existing file path if valid
+            if cookies_path and os.path.isfile(cookies_path):
+                self.cookies_file = cookies_path
+                logger.info(f"Using cookies file from YTDLP_COOKIES_FILE: {self.cookies_file}")
+                return
+
+            # If raw or b64 provided, write to a persistent file if possible
+            content = None
+            if cookies_b64:
+                try:
+                    content = base64.b64decode(cookies_b64).decode("utf-8")
+                except Exception as e:
+                    logger.warning(f"Failed to decode YTDLP_COOKIES_B64: {e}")
+            elif cookies_raw:
+                content = cookies_raw
+
+            if content:
+                # Prefer Render persistent disk if available
+                base_dir = "/app/data" if os.path.isdir("/app/data") else self.download_dir
+                os.makedirs(base_dir, exist_ok=True)
+                dest = os.path.join(base_dir, "cookies.txt")
+                with open(dest, "w") as f:
+                    f.write(content)
+                self.cookies_file = dest
+                logger.info(f"Wrote cookies to: {self.cookies_file}")
+                return
+
+            # No cookies available
+            self.cookies_file = None
+            logger.info("No yt-dlp cookies provided via environment.")
+        except Exception as e:
+            logger.warning(f"Cookie preparation failed: {e}")
+            self.cookies_file = None
 
     @staticmethod
     def extract_video_id(url):
@@ -94,49 +150,67 @@ class YouTubeQAApp:
 
         output_template = os.path.join(self.download_dir, f"{video_id}.%(ext)s")
 
-        # Try different browser cookies in order of preference
-        browsers = ['chrome', 'firefox', 'safari', 'edge']
-
-        for browser in browsers:
-            ydl_opts = {
-                'format': 'm4a/bestaudio/best',
-                'outtmpl': output_template,
-                'progress_hooks': [self.download_progress_hook],
-                'cookiesfrombrowser': (browser,),
-                'quiet': True,
-                'no_warnings': True,
-            }
-
-            try:
-                logger.info(f"Attempting download with {browser} cookies...")
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    info = ydl.extract_info(video_url, download=True)
-                    filename = ydl.prepare_filename(info)
-                logger.info(f"Audio downloaded successfully using {browser} cookies: {filename}")
-                return filename
-            except Exception as e:
-                logger.warning(f"Failed with {browser} cookies: {str(e)}")
-                continue
-
-        # If all browsers fail, try without cookies but with additional options
-        logger.info("Trying download without cookies but with additional options...")
-        ydl_opts = {
+        base_opts = {
             'format': 'm4a/bestaudio/best',
             'outtmpl': output_template,
             'progress_hooks': [self.download_progress_hook],
-            'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
             'quiet': True,
             'no_warnings': True,
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+                'Accept-Language': 'en-US,en;q=0.9'
+            }
+        }
+
+        # 1) Prefer an explicit cookie file provided via env
+        if self.cookies_file:
+            ydl_opts = {**base_opts, 'cookiefile': self.cookies_file}
+            try:
+                logger.info(f"Attempting download with cookiefile: {self.cookies_file}")
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(video_url, download=True)
+                    filename = ydl.prepare_filename(info)
+                logger.info(f"Audio downloaded successfully with cookiefile: {filename}")
+                return filename
+            except Exception as e:
+                logger.warning(f"Failed with cookiefile: {e}")
+                # continue to next strategy
+
+        # 2) Optionally try reading cookies from a local browser (off by default, problematic on servers)
+        try_browsers = self.enable_browser_cookies and (not self.is_server or self.enable_browser_cookies)
+        if try_browsers:
+            browsers = ['chrome', 'firefox', 'safari', 'edge']
+            for browser in browsers:
+                ydl_opts = {**base_opts, 'cookiesfrombrowser': (browser,)}
+                try:
+                    logger.info(f"Attempting download with {browser} cookies...")
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        info = ydl.extract_info(video_url, download=True)
+                        filename = ydl.prepare_filename(info)
+                    logger.info(f"Audio downloaded successfully using {browser} cookies: {filename}")
+                    return filename
+                except Exception as e:
+                    logger.warning(f"Failed with {browser} cookies: {str(e)}")
+
+        # 3) Last resort: try without cookies with additional extractor args
+        logger.info("Trying download without cookies but with additional options...")
+        ydl_opts = {
+            **base_opts,
+            'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
         }
 
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(video_url, download=True)
                 filename = ydl.prepare_filename(info)
-            logger.info(f"Audio downloaded successfully: {filename}")
+            logger.info(f"Audio downloaded successfully without cookies: {filename}")
             return filename
         except Exception as e:
-            logger.error(f"Error downloading audio from video {video_id}: {str(e)}")
+            logger.error(
+                "Error downloading audio from video %s: %s. If this is a members-only/private or rate-limited video, "
+                "you may need to provide YouTube cookies. See README for YTDLP_COOKIES* env vars.",
+                video_id, str(e)
+            )
             return None
 
     def simulate_transcribe_progress(self):
@@ -156,6 +230,12 @@ class YouTubeQAApp:
             yield ('download', 100)
             yield ('transcribe', 100)
             yield "done"
+            return
+
+        # If offline mode is enabled, do not attempt to download; require cache
+        if self.offline_mode:
+            logger.info("Offline mode enabled and transcript not in cache; skipping download.")
+            yield "Error: Offline mode is enabled and this video is not pre-cached."
             return
 
         audio_file = self.download_audio(video_url)

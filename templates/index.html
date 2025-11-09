@@ -169,7 +169,10 @@
 
             <div class="mb-3">
                 <label for="youtube_url" class="form-label">YouTube URL</label>
-                <input type="text" class="form-control" id="youtube_url" placeholder="Enter YouTube URL" x-on:input="checkFormValidity">
+                <input type="text" class="form-control" id="youtube_url" placeholder="Enter YouTube URL" value="{{ default_video_url }}" x-on:input="checkFormValidity">
+                {% if offline_mode %}
+                <small class="text-muted">Offline mode is ON — only cached videos will work.</small>
+                {% endif %}
             </div>
 
             <button class="btn btn-custom w-100 mb-3"

@@ -12,6 +12,18 @@ services:
         sync: false
       - key: AUTH_PASSWORD
         sync: false
+      - key: YTDLP_COOKIES_B64
+        sync: false
+      - key: YTDLP_COOKIES_FILE
+        sync: false
+      - key: YTDLP_COOKIES
+        sync: false
+      - key: ENABLE_BROWSER_COOKIES
+        value: "0"
+      - key: DEFAULT_VIDEO_URL
+        value: "https://www.youtube.com/watch?v=2gv6mToyztM"
+      - key: OFFLINE_MODE
+        value: "0"
     runtime: python
     disk:
       name: data
