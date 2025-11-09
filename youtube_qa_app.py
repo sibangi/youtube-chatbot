@@ -54,8 +54,18 @@ class YouTubeQAApp:
         self.is_server = bool(os.getenv("RENDER") or os.getenv("RENDER_SERVICE_ID") or os.getenv("RENDER_EXTERNAL_URL"))
         self.enable_browser_cookies = os.getenv("ENABLE_BROWSER_COOKIES", "0").lower() in ("1", "true", "yes")
         self.offline_mode = os.getenv("OFFLINE_MODE", "0").lower() in ("1", "true", "yes")
+        # On servers like Render, force-disable browser cookie probing to avoid noisy failures
+        if self.is_server:
+            self.enable_browser_cookies = False
         self.cookies_file = None
         self._prepare_cookies()
+        logger.info(
+            "Startup env: is_server=%s, offline_mode=%s, enable_browser_cookies=%s, cookies_file=%s",
+            self.is_server,
+            self.offline_mode,
+            self.enable_browser_cookies,
+            self.cookies_file,
+        )
         logger.info("YouTubeQAApp initialized successfully")
 
     def _prepare_cookies(self):
