@@ -5,7 +5,7 @@ yt-dlp==2024.11.4
 pydub==0.25.1
 tiktoken==0.8.0
 python-dotenv==1.0.1
-assemblyai==0.34.1
+assemblyai==0.46.0
 ratelimit==2.2.1
 
 
