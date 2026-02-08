@@ -1,0 +1,30 @@
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Environment
+.env
+
+# Runtime data
+audio_downloads/*.mp3
+audio_downloads/*.m4a
+audio_downloads/*.webm
+transcript_cache/*.json
+*.csv
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,106 +1,111 @@
-# YouTube Chatbot
+# YouTube Q&A Chatbot
 
-A Flask-based web application that transcribes YouTube videos and allows users to ask questions about the content using AI.
+![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=flat&logo=python&logoColor=white)
+![Flask](https://img.shields.io/badge/Flask-Web_App-000000?style=flat&logo=flask&logoColor=white)
+![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4o--mini-412991?style=flat&logo=openai&logoColor=white)
+![Render](https://img.shields.io/badge/Deployed_on-Render-46E3B7?style=flat&logo=render&logoColor=white)
+
+An AI-powered web application that transcribes YouTube videos and lets users ask questions about the content in real time. Built as a teaching tool for higher education — students load a lecture or tutorial video and interact with it through natural-language Q&A.
+
+Deployed in production and actively used by undergraduate students as part of a BSc dissertation project at the University of Nottingham.
 
 ## Features
 
-- 🎥 Download and transcribe YouTube videos
-- 🤖 AI-powered Q&A using OpenAI GPT
-- 💾 Transcript caching for faster repeated access
-- 🔐 Authentication system
-- 📊 Admin panel with feedback logging
-- 📝 CSV export of Q&A interactions
+| Feature | Description |
+|---------|-------------|
+| Video transcription | Downloads and transcribes YouTube videos via AssemblyAI |
+| AI-powered Q&A | Answers questions about video content using OpenAI GPT-4o-mini |
+| Streaming responses | Real-time answer generation via Server-Sent Events (SSE) |
+| Transcript caching | Avoids redundant API calls for previously transcribed videos |
+| Authentication | Session-based login to control student access |
+| Admin panel | View all Q&A interactions, export to CSV for analysis |
+| Rate limiting | Prevents API abuse in shared classroom environments |
+| Offline mode | Development mode using cached transcripts (no API calls) |
 
-## Prerequisites
+## Architecture
 
-- Python 3.11 or higher
-- OpenAI API key
-- AssemblyAI API key
-
-## Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone <your-repo-url>
-   cd youtube-chatbot-2
-   ```
-
-2. **Create a virtual environment**
-   ```bash
-   python -m venv venv
-
-   # On Windows
-   venv\Scripts\activate
-
-   # On macOS/Linux
-   source venv/bin/activate
-   ```
-
-3. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Set up environment variables**
-
-   Copy `.env.example` to `.env` and fill in your API keys:
-   ```bash
-   cp .env.example .env
-   ```
-
-   Edit `.env` with your actual values:
-   ```
-   OPENAI_API_KEY=sk-...
-   ASSEMBLYAI_API_KEY=...
-   AUTH_USERNAME=admin
-   AUTH_PASSWORD=your_password
-   ```
-
-## Running Locally
-
-### Development Mode
-
-## YouTube Download Authentication (yt-dlp cookies)
-Many YouTube videos now require authentication or trigger bot checks that block unauthenticated downloads. On local machines, yt-dlp can sometimes read cookies directly from your browser, but that does not work on server environments like Render.
-
-This app supports providing YouTube cookies to yt-dlp via environment variables so downloads work reliably in production.
-
-Supported environment variables (only one is needed):
-- YTDLP_COOKIES_FILE: Absolute path to a Netscape-format cookies file
-- YTDLP_COOKIES: The full Netscape cookie file content as a string
-- YTDLP_COOKIES_B64: Base64-encoded Netscape cookie file content (recommended for Render)
-
-Optional toggle:
-- ENABLE_BROWSER_COOKIES: Set to "1" to allow attempting cookies-from-browser locally. Default is off to avoid errors on servers.
-
-How to export cookies:
-1) Install the "Get cookies.txt" browser extension (or any tool that exports in Netscape format).
-2) While logged in to YouTube in your browser, export cookies for youtube.com and google.com as a single cookies.txt file.
-3) Verify the file begins with lines like:
 ```
-# Netscape HTTP Cookie File
-.youtube.com	TRUE	/	FALSE	...
+┌──────────┐     ┌──────────────┐     ┌──────────────┐
+│  Browser  │────▶│  Flask App   │────▶│  OpenAI API  │
+│  (HTML)   │◀────│  (app.py)    │     │  GPT-4o-mini │
+└──────────┘ SSE └──────┬───────┘     └──────────────┘
+                        │
+              ┌─────────┴─────────┐
+              │                   │
+     ┌──────────────┐    ┌──────────────┐
+     │  yt-dlp      │    │ AssemblyAI   │
+     │  (download)  │    │ (transcribe) │
+     └──────────────┘    └──────────────┘
 ```
 
-Using cookies locally:
-- Point the app to the file path:
+## Repository Structure
+
 ```
-YTDLP_COOKIES_FILE=/absolute/path/to/cookies.txt
-```
-Or paste the content directly:
-```
-YTDLP_COOKIES="<paste Netscape cookies content here>"
+youtube-chatbot/
+├── app.py               # Flask routes, auth, SSE streaming
+├── youtube_qa_app.py    # Core engine: download, transcribe, Q&A
+├── run_local.py         # Local development runner
+├── templates/
+│   ├── index.html       # Main Q&A interface
+│   ├── login.html       # Authentication page
+│   └── admin.html       # Admin panel (interaction logs)
+├── render.yaml          # Render deployment configuration
+├── requirements.txt     # Python dependencies
+├── runtime.txt          # Python version (Render)
+└── .env.example         # Environment variable template
 ```
 
-Using cookies on Render (recommended: base64):
-- Base64-encode your cookies file locally:
+## Quick Start
+
+```bash
+git clone https://github.com/sibangi/youtube-chatbot.git
+cd youtube-chatbot
+python -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env     # Add your API keys
+python run_local.py
 ```
+
+Requires API keys for [OpenAI](https://platform.openai.com/) and [AssemblyAI](https://www.assemblyai.com/).
+
+## Deployment
+
+The app is configured for [Render](https://render.com/) via `render.yaml`. Key environment variables:
+
+| Variable | Purpose |
+|----------|--------|
+| `OPENAI_API_KEY` | OpenAI API authentication |
+| `ASSEMBLYAI_API_KEY` | AssemblyAI transcription service |
+| `AUTH_USERNAME` / `AUTH_PASSWORD` | Student login credentials |
+| `YTDLP_COOKIES_B64` | Base64-encoded YouTube cookies (see below) |
+
+<details>
+<summary><strong>YouTube cookie configuration (yt-dlp)</strong></summary>
+
+<br>
+
+YouTube may block unauthenticated downloads on server environments. The app supports three methods for providing cookies to yt-dlp:
+
+- `YTDLP_COOKIES_FILE` — path to a Netscape-format cookies file
+- `YTDLP_COOKIES` — cookie file content as a string
+- `YTDLP_COOKIES_B64` — base64-encoded cookie file (recommended for Render)
+
+To export cookies: install a "Get cookies.txt" browser extension, export cookies for youtube.com while logged in, then base64-encode:
+
+```bash
 base64 -i cookies.txt | pbcopy   # macOS
-# or
-base64 -w0 cookies.txt | xclip -selection clipboard   # Linux
 ```
-- In Render dashboard, add an env var `YTDLP_COOKIES_B64` and paste the encoded value.
 
-Notes:
-- The app will first try the provided cookie file. If none is provided, it falls back to unauthenticated download with extra options, which may fail for members-only/private or rate-limited videos.
-- Browser cookie auto-detection is disabled by default on servers to prevent noisy errors like "could not find chrome cookies database".
+</details>
+
+## Dependencies
+
+- [Flask](https://flask.palletsprojects.com/) — web framework
+- [OpenAI Python SDK](https://github.com/openai/openai-python) — GPT-4o-mini integration
+- [AssemblyAI](https://www.assemblyai.com/) — speech-to-text transcription
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) — YouTube video download
+- [Gunicorn](https://gunicorn.org/) — production WSGI server
+
+## License
+
+[MIT](LICENSE)
